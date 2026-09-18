@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Copy, Check } from "lucide-react"
 import { ToggleMode } from "@/components/toggle-mode"
 
@@ -31,8 +32,9 @@ export default function DevToolsSuite() {
       </div>
 
       <Tabs defaultValue="json" className="w-full">
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 lg:grid-cols-7">
           <TabsTrigger value="json">JSON</TabsTrigger>
+          <TabsTrigger value="csv">CSV → JSON</TabsTrigger>
           <TabsTrigger value="base64">Base64</TabsTrigger>
           <TabsTrigger value="timestamp">Timestamp</TabsTrigger>
           <TabsTrigger value="url">URL</TabsTrigger>
@@ -42,6 +44,10 @@ export default function DevToolsSuite() {
 
         <TabsContent value="json">
           <JSONFormatter copyToClipboard={copyToClipboard} copied={copied} />
+        </TabsContent>
+
+        <TabsContent value="csv">
+          <CSVToJSON copyToClipboard={copyToClipboard} copied={copied} />
         </TabsContent>
 
         <TabsContent value="base64">
@@ -133,6 +139,111 @@ function JSONFormatter({
               </Button>
             </div>
             <Textarea value={output} readOnly className="min-h-32" />
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function CSVToJSON({
+  copyToClipboard,
+  copied,
+}: { copyToClipboard: (text: string, id: string) => void; copied: string | null }) {
+  const [input, setInput] = useState("")
+  const [output, setOutput] = useState("")
+  const [error, setError] = useState("")
+  const [hasHeaders, setHasHeaders] = useState(true)
+
+  const parseCSV = (csv: string) => {
+    const rows: string[][] = []
+    let row: string[] = []
+    let cell = ""
+    let quoted = false
+
+    for (let index = 0; index < csv.length; index += 1) {
+      const character = csv[index]
+      const nextCharacter = csv[index + 1]
+      if (character === '"' && quoted && nextCharacter === '"') {
+        cell += '"'
+        index += 1
+      } else if (character === '"') {
+        quoted = !quoted
+      } else if (character === "," && !quoted) {
+        row.push(cell.trim())
+        cell = ""
+      } else if ((character === "\\n" || character === "\\r") && !quoted) {
+        if (character === "\\r" && nextCharacter === "\\n") index += 1
+        row.push(cell.trim())
+        if (row.some((value) => value.length > 0)) rows.push(row)
+        row = []
+        cell = ""
+      } else {
+        cell += character
+      }
+    }
+
+    if (quoted) throw new Error("Unclosed quote in CSV")
+    if (cell.length > 0 || row.length > 0) {
+      row.push(cell.trim())
+      rows.push(row)
+    }
+    return rows
+  }
+
+  const convert = () => {
+    try {
+      const rows = parseCSV(input)
+      if (!rows.length) throw new Error("CSV is empty")
+      const width = rows[0].length
+      if (rows.some((row) => row.length !== width)) throw new Error("Rows have different numbers of columns")
+
+      const headers = hasHeaders
+        ? rows[0].map((header, index) => header || `column_${index + 1}`)
+        : rows[0].map((_, index) => `column_${index + 1}`)
+      const dataRows = hasHeaders ? rows.slice(1) : rows
+      const result = dataRows.map((values) => Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ""])))
+      setOutput(JSON.stringify(result, null, 2))
+      setError("")
+    } catch (conversionError) {
+      setOutput("")
+      setError(conversionError instanceof Error ? conversionError.message : "Invalid CSV format")
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>CSV to JSON</CardTitle>
+        <CardDescription>Convert comma-separated data into a JSON array of objects</CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <div>
+          <Label htmlFor="csv-input">Input CSV</Label>
+          <Textarea
+            id="csv-input"
+            placeholder={'name,email\\nAda,ada@example.com'}
+            value={input}
+            onChange={(event) => setInput(event.target.value)}
+            className="min-h-40 font-mono text-sm"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <Checkbox id="csv-headers" checked={hasHeaders} onCheckedChange={(checked) => setHasHeaders(checked === true)} />
+          <Label htmlFor="csv-headers">First row contains column names</Label>
+        </div>
+        <Button onClick={convert}>Convert to JSON</Button>
+        {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
+        {output && (
+          <div>
+            <div className="mb-2 flex items-center justify-between">
+              <Label htmlFor="csv-output">JSON output</Label>
+              <Button size="sm" variant="outline" onClick={() => copyToClipboard(output, "csv-json")}>
+                {copied === "csv-json" ? <Check data-icon="inline-start" /> : <Copy data-icon="inline-start" />}
+                {copied === "csv-json" ? "Copied" : "Copy"}
+              </Button>
+            </div>
+            <Textarea id="csv-output" value={output} readOnly className="min-h-56 font-mono text-sm" />
           </div>
         )}
       </CardContent>
