@@ -172,8 +172,8 @@ function CSVToJSON({
       } else if (character === "," && !quoted) {
         row.push(cell.trim())
         cell = ""
-      } else if ((character === "\\n" || character === "\\r") && !quoted) {
-        if (character === "\\r" && nextCharacter === "\\n") index += 1
+      } else if ((character === "\n" || character === "\r") && !quoted) {
+        if (character === "\r" && nextCharacter === "\n") index += 1
         row.push(cell.trim())
         if (row.some((value) => value.length > 0)) rows.push(row)
         row = []
@@ -222,7 +222,7 @@ function CSVToJSON({
           <Label htmlFor="csv-input">Input CSV</Label>
           <Textarea
             id="csv-input"
-            placeholder={'name,email\\nAda,ada@example.com'}
+            placeholder={'name,email\nAda,ada@example.com'}
             value={input}
             onChange={(event) => setInput(event.target.value)}
             className="min-h-40 font-mono text-sm"
